@@ -18,7 +18,7 @@ const msgRetryCounterCache = new NodeCache();
 const CONNECTION_LOST = 408;
 const RESTART_REQUIRED = 515;
 
-const createSocket = async (state, version) => {
+const createSocket = async ({ state, version }) => {
   return makeWASocket.default({
     version,
     logger,
@@ -33,34 +33,18 @@ const createSocket = async (state, version) => {
   });
 };
 
-const createSession = async ({ sessionId, res }) => {
-  const { state, saveCreds } = await useSQLAuthState(sessionId, false);
-  // const { state, saveCreds } = await useMultiFileAuthState(
-  //   `sessions/${sessionId}`
-  // );
-  const { version, isLatest } = await fetchLatestBaileysVersion();
-  console.log(`using WA v${version.join(".")}, isLatest: ${isLatest}`);
-  const sock = await createSocket(state, version);
-  await startSock({ sock, sessionId, res, saveCreds });
-};
-
-const startSock = async ({ sock, sessionId, res, saveCreds }) => {
-  let sendQr = false;
-
-  const logout = async () => {
-    try {
-      console.log("logging out");
-      await sock.logout();
-      await query(`DELETE FROM auth_keys WHERE bot_id = ?`, [sessionId]);
-    } catch (error) {
-      console.error("error while logging out", error);
-    }
-  };
-
+const startEventsAndSendQrCode = async ({
+  sock,
+  res,
+  saveCreds,
+  sessionId,
+  sendQrCode = true,
+}) => {
   sock.ev.process(async (events) => {
     const connectionUpdate = events["connection.update"];
     const credsUpdate = events["creds.update"];
     const messageUpsert = events["messages.upsert"];
+    let sendQrCode = true;
 
     if (connectionUpdate) {
       const { connection, lastDisconnect, qr } = connectionUpdate;
@@ -73,13 +57,49 @@ const startSock = async ({ sock, sessionId, res, saveCreds }) => {
           await logout();
         } else {
           console.log("Restart required.");
-          createSession({ sessionId, res });
+          createSession({
+            sessionId: sessionId,
+            res: null,
+            sendQrCode: false,
+          });
         }
       }
 
-      if (qr && !sendQr) {
-        sendQr = true;
-        // response(res, 200, true, "QR code generated.", { qr });
+      if (qr && sendQrCode) {
+        sendQrCode = false;
+        response(res, 200, true, "QR code generated.", { qr });
+      }
+    }
+
+    if (credsUpdate) {
+      await saveCreds();
+    }
+  });
+};
+
+const startEvents = async ({ sock, saveCreds, sessionId }) => {
+  sock.ev.process(async (events) => {
+    const connectionUpdate = events["connection.update"];
+    const credsUpdate = events["creds.update"];
+    const messageUpsert = events["messages.upsert"];
+    let sendQrCode = true;
+
+    if (connectionUpdate) {
+      const { connection, lastDisconnect, qr } = connectionUpdate;
+
+      if (connection === "close") {
+        const errorCode = lastDisconnect?.error?.output?.statusCode;
+        console.log("errorCode", errorCode);
+        if (errorCode === CONNECTION_LOST || errorCode !== RESTART_REQUIRED) {
+          console.log("Connection closed. You are logged out.");
+          await logout();
+        } else {
+          console.log("Restart required.");
+          createSession({
+            sessionId: sessionId,
+            res: null,
+          });
+        }
       }
     }
 
@@ -93,22 +113,27 @@ const startSock = async ({ sock, sessionId, res, saveCreds }) => {
           try {
             console.log("replying to", msg.key.remoteJid);
             let message = await sock.readMessages([msg.key]);
-            // console.log("message", msg);
-            // console.log("message read", message);
+            let group = await sock.groupMetadata(msg.key.remoteJid);
+            console.log("group", group);
+            let groupName = group.subject;
             console.log("✖️✖️ message", msg);
-            res = await axios.post(
-              "https://n8n-production-5333.up.railway.app/webhook/f93b4ca9-9e5b-4605-8890-c0096614f018",
-              {
-                id: msg.key.id,
-                msg: msg.message.conversation,
-                from: msg.key.remoteJid,
-              }
-            );
-            console.log("res", res.data);
-            console.log("res", res.data.message.content);
-            await sock.sendMessage(msg.key.remoteJid, {
-              text: res.data.message.content,
-            });
+            let msgTimeStamps = msg.messageTimestamp;
+            let date = new Date(msgTimeStamps * 1000);
+            let dateStr = date.toLocaleDateString("pt-br");
+            let hour = date.toLocaleTimeString("pt-br");
+            // res = await axios.post(
+            //   "https://n8n-production-5333.up.railway.app/webhook-teste/2f132377-1fb9-4b55-b046-8c6c5ab6807d",
+            //   {
+            //     msg: msg.message.conversation,
+            //     from: msg.key.remoteJid,
+            //     name: msg.pushName,
+            //     day: dateStr,
+            //     hour: hour,
+            //   }
+            // );
+            // await sock.sendMessage(msg.key.remoteJid, {
+            //   text: res.data.message.content,
+            // });
           } catch (error) {
             console.error("error", error);
           }
@@ -118,6 +143,36 @@ const startSock = async ({ sock, sessionId, res, saveCreds }) => {
     // http://localhost:5678/webhook-test/f93b4ca9-9e5b-4605-8890-c0096614f018
     //http://localhost:5678/webhook/f93b4ca9-9e5b-4605-8890-c0096614f018
   });
+};
+
+const createSession = async ({ sessionId, res, sendQrCode }) => {
+  try {
+    const { state, saveCreds } = await useSQLAuthState(sessionId);
+    const { version, isLatest } = await fetchLatestBaileysVersion();
+    console.log(`using WA v${version.join(".")}, isLatest: ${isLatest}`);
+    const sock = await createSocket({ state, version });
+    await startEventsAndSendQrCode({
+      sock,
+      saveCreds,
+      res,
+      sessionId,
+      sendQrCode,
+    });
+    console.log("session created");
+    console.log("The socket", sock);
+    return {
+      status: true,
+      message: "Session created",
+      sock,
+    };
+  } catch (error) {
+    console.error("Error creating session", error);
+    return {
+      status: false,
+      message: "Error creating session",
+      error,
+    };
+  }
 };
 
 const getSession = async (sessionId) => {
@@ -156,19 +211,19 @@ const init = async () => {
     `SELECT * FROM auth_keys WHERE key_id = 'creds'`,
     []
   );
-  console.log("sessions", sessions);
+
   for (const session of sessions) {
     try {
-      const { state, saveCreds } = await useSQLAuthState(session.bot_id, false);
+      const { state, saveCreds } = await useSQLAuthState(session.bot_id);
       const { version } = await fetchLatestBaileysVersion();
-      const sock = await createSocket(state, version);
-      await startSock({
-        sock,
-        sessionId: session.bot_id,
-        res: null,
-        saveCreds,
-      });
-    } catch (error) {}
+      const sock = await createSocket({ state, version });
+      await startEvents({ sock, saveCreds, sessionId: session.bot_id });
+      const { waitForSocketOpen, sendMessages } = sock;
+      await waitForSocketOpen();
+      console.log(`Session ${session.bot_id} started`);
+    } catch (error) {
+      console.error("Error starting session", error);
+    }
   }
 };
 //
@@ -176,4 +231,4 @@ const init = async () => {
 
 init();
 
-export { startSock, getSession, deleteSession, isSessionExists, createSession };
+export { getSession, deleteSession, isSessionExists, createSession };

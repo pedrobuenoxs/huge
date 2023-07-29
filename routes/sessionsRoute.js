@@ -26,4 +26,10 @@ router.delete("/delete/:id", userValidator, controller.del);
 
 router.get("/get-users-instances", userValidator, controller.getUserSessions);
 
+router.post(
+  "/send",
+  userValidator,
+  async (req, res) => await controller.send(req, res)
+);
+
 export default router;

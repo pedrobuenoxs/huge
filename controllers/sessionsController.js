@@ -1,5 +1,4 @@
 import {
-  startSock,
   getSession,
   isSessionExists,
   createSession,
@@ -107,4 +106,14 @@ const getUserSessions = async (req, res) => {
   }
 };
 
-export { find, status, add, del, getUserSessions };
+const send = async (req, res) => {
+  const { sessionId, jid, message } = req.body;
+  try {
+    console.log("Sending message");
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, msg: "Error sending message" });
+  }
+};
+
+export { find, status, add, del, getUserSessions, send };

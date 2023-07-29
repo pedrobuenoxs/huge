@@ -19,8 +19,8 @@ const fixFileName = (file) => {
 };
 
 export default async function useSQLAuthState(sessionID, saveOnlyCreds) {
-  const localFolder = path.join(process.cwd(), "sessions", sessionID);
-  const localFile = (key) => path.join(localFolder, fixFileName(key) + ".json");
+  const localFolder = "folder";
+  const localFile = "file.json";
   if (saveOnlyCreds) await fs.mkdir(localFolder, { recursive: true });
 
   async function writeData(data, key) {
