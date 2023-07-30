@@ -43,11 +43,11 @@ const status = async (req, res) => {
 
 const add = async (req, res) => {
   try {
-    const { id, isLegacy } = req.body;
+    const { client_id, sessionId } = req.body;
 
     // Checking user
-    console.log(`Creating session: ${id}`);
-    let session = await isSessionExists(id);
+    console.log(`Creating session: ${sessionId}`);
+    let session = await isSessionExists(sessionId);
     if (session) {
       return response(
         res,
@@ -58,13 +58,12 @@ const add = async (req, res) => {
     }
 
     // Adding new client in database for this user
-    await query(`INSERT INTO instance (uid, client_id, name) VALUES (?,?,?)`, [
-      req.session.user.uid,
-      id,
-      req.body.name,
+    await query(`INSERT INTO instance (uid, client_id) VALUES (?,?)`, [
+      sessionId,
+      client_id,
     ]);
 
-    await createSession({ sessionId: id, res });
+    await createSession({ sessionId: sessionId, res });
   } catch (error) {
     console.log(error);
     response(res, 500, false, "Server error.");

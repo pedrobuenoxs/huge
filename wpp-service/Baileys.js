@@ -44,7 +44,6 @@ const startEventsAndSendQrCode = async ({
     const connectionUpdate = events["connection.update"];
     const credsUpdate = events["creds.update"];
     const messageUpsert = events["messages.upsert"];
-    let sendQrCode = true;
 
     if (connectionUpdate) {
       const { connection, lastDisconnect, qr } = connectionUpdate;
@@ -158,8 +157,6 @@ const createSession = async ({ sessionId, res, sendQrCode }) => {
       sessionId,
       sendQrCode,
     });
-    console.log("session created");
-    console.log("The socket", sock);
     return {
       status: true,
       message: "Session created",
