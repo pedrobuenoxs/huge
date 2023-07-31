@@ -23,6 +23,6 @@ router.post(
 
 // router.get("/get-users-instances", controller.getUserSessions);
 
-// router.post("/send", async (req, res) => await controller.send(req, res));
+router.post("/send", async (req, res) => await controller.send(req, res));
 
 export default router;
