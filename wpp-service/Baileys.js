@@ -134,9 +134,7 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
                 group: groupName,
               });
               if (res.data[0].status == "success") {
-                await sock.sendMessage(msg.key.remoteJid, {
-                  text: res.data[0].message,
-                });
+                await sock.sendMessage(msg.key.remoteJid, res.data[0].message);
               }
             }
           } catch (error) {
