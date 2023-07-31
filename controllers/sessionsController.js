@@ -109,8 +109,9 @@ const getUserSessions = async (req, res) => {
 const send = async (req, res) => {
   const { sessionId, jid, message } = req.body;
   try {
-    initSocketAndSendMessage({ sessionId, jid, message });
+    await initSocketAndSendMessage({ sessionId, jid, message });
     console.log("Sending message");
+    res.json({ success: true, msg: "Message sent" });
   } catch (error) {
     console.log(error);
     res.json({ success: false, msg: "Error sending message" });
