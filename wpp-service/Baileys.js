@@ -219,7 +219,7 @@ const initSocketAndSendMessage = async ({ sessionId, jid, message }) => {
 
     await waitForSocketOpen();
     setTimeout(async () => {
-      await sendMessage(jid, { text: message });
+      await sendMessage(jid, message);
       console.log("Message sent");
     }, 5000);
     console.log("Message sent");
@@ -230,7 +230,7 @@ const initSocketAndSendMessage = async ({ sessionId, jid, message }) => {
 
 const init = async () => {
   const sessions = await query(
-    `SELECT * FROM auth_keys WHERE key_id = 'creds'`,
+    `SELECT * FROM auth_keys WHERE key_id = 'creds' AND bot_id = 'car'`,
     []
   );
 
@@ -247,6 +247,17 @@ const init = async () => {
       console.error("Error starting session", error);
     }
   }
+};
+
+const buttonMessage = {
+  text: "Hi it's button message",
+  footer: "Hello World",
+  buttons: [
+    { buttonId: "id1", buttonText: { displayText: "Button 1" }, type: 1 },
+    { buttonId: "id2", buttonText: { displayText: "Button 2" }, type: 1 },
+    { buttonId: "id3", buttonText: { displayText: "Button 3" }, type: 1 },
+  ],
+  headerType: 1,
 };
 
 init();

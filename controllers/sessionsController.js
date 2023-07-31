@@ -58,7 +58,7 @@ const add = async (req, res) => {
     }
 
     // Adding new client in database for this user
-    await query(`INSERT INTO instance (uid, client_id) VALUES (?,?)`, [
+    await query(`INSERT INTO instance (bot_id, client_id) VALUES (?,?)`, [
       sessionId,
       clientId,
     ]);
