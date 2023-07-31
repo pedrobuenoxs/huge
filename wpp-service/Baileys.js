@@ -111,7 +111,6 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
         if (!msg.key.fromMe) {
           try {
             console.log("replying to", msg.key.remoteJid);
-            let message = await sock.readMessages([msg.key]);
             let group = await sock.groupMetadata(msg.key.remoteJid);
             console.log("group", group);
             let groupName = group.subject;
@@ -120,19 +119,26 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
             let date = new Date(msgTimeStamps * 1000);
             let dateStr = date.toLocaleDateString("pt-br");
             let hour = date.toLocaleTimeString("pt-br");
-            // res = await axios.post(
-            //   "https://n8n-production-5333.up.railway.app/webhook-teste/2f132377-1fb9-4b55-b046-8c6c5ab6807d",
-            //   {
-            //     msg: msg.message.conversation,
-            //     from: msg.key.remoteJid,
-            //     name: msg.pushName,
-            //     day: dateStr,
-            //     hour: hour,
-            //   }
-            // );
-            // await sock.sendMessage(msg.key.remoteJid, {
-            //   text: res.data.message.content,
-            // });
+            let webhook = await query(
+              `SELECT url FROM webhooks WHERE bot_id = ?`,
+              [sessionId]
+            );
+            let webhookUrl = webhook[0].url;
+            if (webhookUrl) {
+              let res = await axios.post(webhookUrl, {
+                msg: msg.message.conversation,
+                from: msg.key.remoteJid,
+                name: msg.pushName,
+                day: dateStr,
+                hour: hour,
+                group: groupName,
+              });
+              if (res.data[0].status == "success") {
+                await sock.sendMessage(msg.key.remoteJid, {
+                  text: res.data[0].message,
+                });
+              }
+            }
           } catch (error) {
             console.error("error", error);
           }

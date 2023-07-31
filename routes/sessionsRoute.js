@@ -6,18 +6,23 @@ import * as controller from "./../controllers/sessionsController.js";
 
 const router = Router();
 
-router.get("/find/:id", sessionValidator, controller.find);
+// router.get("/find/:id", sessionValidator, controller.find);
 
-router.get("/status/:id", sessionValidator, controller.status);
+// router.get("/status/:id", sessionValidator, controller.status);
 
-router.get("/status-internal/:id", sessionValidator, controller.status);
+// router.get("/status-internal/:id", sessionValidator, controller.status);
 
-router.post("/add", body("id").notEmpty(), requestValidator, controller.add);
+router.post(
+  "/add",
+  body("sessionId").notEmpty(),
+  requestValidator,
+  controller.add
+);
 
-router.delete("/delete/:id", controller.del);
+// router.delete("/delete/:id", controller.del);
 
-router.get("/get-users-instances", controller.getUserSessions);
+// router.get("/get-users-instances", controller.getUserSessions);
 
-router.post("/send", async (req, res) => await controller.send(req, res));
+// router.post("/send", async (req, res) => await controller.send(req, res));
 
 export default router;

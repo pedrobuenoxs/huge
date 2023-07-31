@@ -43,7 +43,7 @@ const status = async (req, res) => {
 
 const add = async (req, res) => {
   try {
-    const { client_id, sessionId } = req.body;
+    const { clientId, sessionId } = req.body;
 
     // Checking user
     console.log(`Creating session: ${sessionId}`);
@@ -60,10 +60,10 @@ const add = async (req, res) => {
     // Adding new client in database for this user
     await query(`INSERT INTO instance (uid, client_id) VALUES (?,?)`, [
       sessionId,
-      client_id,
+      clientId,
     ]);
 
-    await createSession({ sessionId: sessionId, res });
+    await createSession({ sessionId, res });
   } catch (error) {
     console.log(error);
     response(res, 500, false, "Server error.");
