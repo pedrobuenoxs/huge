@@ -123,7 +123,7 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
               `SELECT url FROM webhooks WHERE bot_id = ?`,
               [sessionId]
             );
-            let webhookUrl = webhook[0].url;
+            let webhookUrl = webhook[0]?.url;
             if (webhookUrl) {
               let res = await axios.post(webhookUrl, {
                 msg: msg.message.conversation,
