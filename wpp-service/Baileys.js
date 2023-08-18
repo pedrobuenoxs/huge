@@ -218,7 +218,7 @@ const initSocketAndSendMessage = async ({ sessionId, jid, message }) => {
 
     await waitForSocketOpen();
     setTimeout(async () => {
-      await sendMessage(jid, message);
+      await sendMessage(jid, { text: message });
       console.log("Message sent");
     }, 5000);
     console.log("Message sent");
