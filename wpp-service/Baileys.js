@@ -107,34 +107,35 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
 
     if (messageUpsert && messageUpsert.type === "notify") {
       for (const msg of messageUpsert.messages) {
-        console.log("msg", msg);
         if (!msg.key.fromMe) {
           try {
             console.log("replying to", msg.key.remoteJid);
-            let group = await sock.groupMetadata(msg.key.remoteJid);
-            console.log("group", group);
-            let groupName = group.subject;
-            console.log("✖️✖️ message", msg);
-            let msgTimeStamps = msg.messageTimestamp;
-            let date = new Date(msgTimeStamps * 1000);
-            let dateStr = date.toLocaleDateString("pt-br");
-            let hour = date.toLocaleTimeString("pt-br");
-            let webhook = await query(
-              `SELECT url FROM webhooks WHERE bot_id = ?`,
+            let isGroup = msg.key.remoteJid.endsWith("@g.us");
+            let group = isGroup
+              ? await sock.groupMetadata(msg.key.remoteJid)
+              : {};
+            console.log("group", sessionId);
+            let queryRes = await query(
+              `SELECT webhook_url,flow_logic FROM webhooks WHERE bot_id = ?`,
               [sessionId]
             );
-            let webhookUrl = webhook[0]?.url;
+            let webhookUrl = queryRes[0]?.webhook_url;
+            let flowLogic = queryRes[0]?.flow_logic;
+
+            const postUrl = `${webhookUrl}/${flowLogic}`;
+            console.log(`We found a webhook: ${postUrl}`);
             if (webhookUrl) {
-              let res = await axios.post(webhookUrl, {
-                msg: msg.message.conversation,
+              let res = await axios.post(postUrl, {
+                sessionId: sessionId,
                 from: msg.key.remoteJid,
-                name: msg.pushName,
-                day: dateStr,
-                hour: hour,
-                group: groupName,
+                msg,
+                group: group,
               });
-              if (res.data[0].status == "success") {
-                await sock.sendMessage(msg.key.remoteJid, res.data[0].message);
+              console.log("res", res.data);
+              if (res.data.status == "success") {
+                await sock.sendMessage(msg.key.remoteJid, {
+                  text: res.data.message,
+                });
               }
             }
           } catch (error) {
