@@ -18,7 +18,8 @@ const msgRetryCounterCache = new NodeCache();
 const CONNECTION_LOST = 408;
 const RESTART_REQUIRED = 515;
 
-const createSocket = async ({ state, version }) => {
+const createSocket = async ({ state }) => {
+  const { version } = await fetchLatestBaileysVersion();
   return makeWASocket.default({
     version,
     logger,
@@ -75,7 +76,12 @@ const startEventsAndSendQrCode = async ({
   });
 };
 
-const startEvents = async ({ sock, saveCreds, sessionId }) => {
+const startEvents = async ({
+  sock,
+  saveCreds,
+  sessionId,
+  numReconnect = 3,
+}) => {
   sock.ev.process(async (events) => {
     const connectionUpdate = events["connection.update"];
     const credsUpdate = events["creds.update"];
@@ -89,10 +95,18 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
         const errorCode = lastDisconnect?.error?.output?.statusCode;
         console.log("errorCode", errorCode);
         if (errorCode === CONNECTION_LOST || errorCode !== RESTART_REQUIRED) {
-          console.log("Connection closed. You are logged out.");
-        } else {
-          console.log("Restart required.");
-          startEvents({ sock, saveCreds, sessionId });
+          try {
+            // try to reconnect
+            if (numReconnect > 0) {
+              console.log("Reconnecting...");
+              numReconnect--;
+              const { state, saveCreds } = await useSQLAuthState(sessionId);
+              const sock = await createSocket({ state });
+              await startEvents({ sock, saveCreds, sessionId, numReconnect });
+            }
+          } catch (error) {
+            console.error("Error reconnecting", error);
+          }
         }
       }
     }
@@ -123,16 +137,6 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
             const postUrl = `http://localhost:3001/webhook/${sessionId}`;
 
             console.log(`Message received: ${message}`);
-
-            // console.log(`the post url is ${postUrl}
-            // the body is ${JSON.stringify(
-            //   {
-            //     message: msg,
-            //     group: group,
-            //   },
-            //   null,
-            //   4
-            // )}`);
 
             const prefixes = ["Boris,", "/"];
 
@@ -243,8 +247,7 @@ const deleteSession = async (sessionId, logout = true) => {
 const initSocketAndSendMessage = async ({ sessionId, jid, message }) => {
   try {
     const { state, saveCreds } = await useSQLAuthState(sessionId);
-    const { version } = await fetchLatestBaileysVersion();
-    const sock = await createSocket({ state, version });
+    const sock = await createSocket({ state });
     await startEvents({ sock, saveCreds, sessionId });
     const { waitForSocketOpen, sendMessage } = sock;
 
@@ -270,8 +273,7 @@ const init = async () => {
   for (const session of sessions) {
     try {
       const { state, saveCreds } = await useSQLAuthState(session.bot_id);
-      const { version } = await fetchLatestBaileysVersion();
-      const sock = await createSocket({ state, version });
+      const sock = await createSocket({ state });
       await startEvents({ sock, saveCreds, sessionId: session.bot_id });
       const { waitForSocketOpen, sendMessages } = sock;
       await waitForSocketOpen();
