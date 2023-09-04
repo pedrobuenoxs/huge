@@ -15,6 +15,17 @@ const msgRetryCounterCache = new NodeCache();
 const CONNECTION_LOST = 408;
 const RESTART_REQUIRED = 515;
 
+const tempStore = {}; // This object will be used to store the bot's sent messages.  (MessageInfo object)
+
+// Below's function is what solves the problem
+const getMessage = async (key) => {
+  const { id } = key;
+  console.log("Resending", id);
+  return tempStore[id]?.message;
+};
+
+export { tempStore };
+
 const createSocket = async ({ state }) => {
   const { version } = await fetchLatestBaileysVersion();
   return makeWASocket.default({
@@ -28,6 +39,7 @@ const createSocket = async ({ state }) => {
     msgRetryCounterCache,
     generateHighQualityLinkPreview: true,
     shouldIgnoreJid: (jid) => isJidBroadcast(jid),
+    getMessage,
   });
 };
 
@@ -113,9 +125,10 @@ const startEvents = async ({
               });
               console.log("Status", JSON.stringify(res.data, null, 4));
               if (res.data.status == "success") {
-                await sock.sendMessage(msg.key.remoteJid, {
+                let sent = await sock.sendMessage(msg.key.remoteJid, {
                   text: res.data.message,
                 });
+                tempStore[sent.key.id] = sent;
               }
             }
           } catch (error) {

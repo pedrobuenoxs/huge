@@ -1,4 +1,4 @@
-import { activeSockets } from "../wpp-service/Baileys.js";
+import { activeSockets, tempStore } from "../wpp-service/Baileys.js";
 import response from "./../response.js";
 import query from "../database/dbpromise.js";
 
@@ -28,7 +28,8 @@ const send = async (req, res) => {
 
   if (baileysSocket) {
     try {
-      let send = await baileysSocket.sendMessage(jid, { text: message });
+      let sent = await baileysSocket.sendMessage(jid, { text: message });
+      tempStore[sent.key.id] = sent;
       res.json({ status: "success" });
     } catch (err) {
       res.status(500).json({ status: "error", message: err.message });
