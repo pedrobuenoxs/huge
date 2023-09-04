@@ -4,6 +4,7 @@ import {
   createSession,
   deleteSession,
   initSocketAndSendMessage,
+  activeSockets,
 } from "../wpp-service/Baileys.js";
 import response from "./../response.js";
 import query from "../database/dbpromise.js";
@@ -108,13 +109,25 @@ const getUserSessions = async (req, res) => {
 
 const send = async (req, res) => {
   const { sessionId, jid, message } = req.body;
-  try {
-    await initSocketAndSendMessage({ sessionId, jid, message });
-    console.log("Sending message");
-    res.json({ success: true, msg: "Message sent" });
-  } catch (error) {
-    console.log(error);
-    res.json({ success: false, msg: "Error sending message" });
+
+  if (!sessionId || !jid || !message) {
+    return res.status(400).json({
+      status: "error",
+      message: "Missing required fields",
+    });
+  }
+
+  const baileysSocket = activeSockets[sessionId];
+
+  if (baileysSocket) {
+    try {
+      let send = await baileysSocket.sendMessage(jid, { text: message });
+      res.json({ status: "success" });
+    } catch (err) {
+      res.status(500).json({ status: "error", message: err.message });
+    }
+  } else {
+    res.status(404).json({ status: "error", message: "Session not found" });
   }
 };
 

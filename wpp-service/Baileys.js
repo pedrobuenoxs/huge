@@ -53,7 +53,6 @@ const startEventsAndSendQrCode = async ({
         console.log("errorCode", errorCode);
         if (errorCode === CONNECTION_LOST || errorCode !== RESTART_REQUIRED) {
           console.log("Connection closed. You are logged out.");
-          await logout();
         } else {
           console.log("Restart required.");
           createSession({
@@ -93,10 +92,7 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
           console.log("Connection closed. You are logged out.");
         } else {
           console.log("Restart required.");
-          createSession({
-            sessionId: sessionId,
-            res: null,
-          });
+          startEvents({ sock, saveCreds, sessionId });
         }
       }
     }
@@ -109,29 +105,67 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
       for (const msg of messageUpsert.messages) {
         if (!msg.key.fromMe) {
           try {
-            console.log("replying to", msg.key.remoteJid);
             let isGroup = msg.key.remoteJid.endsWith("@g.us");
             let group = isGroup
               ? await sock.groupMetadata(msg.key.remoteJid)
               : {};
-            console.log("group", sessionId);
             let queryRes = await query(
               `SELECT webhook_url,flow_logic FROM webhooks WHERE bot_id = ?`,
               [sessionId]
             );
             let webhookUrl = queryRes[0]?.webhook_url;
-            let flowLogic = queryRes[0]?.flow_logic;
 
-            const postUrl = `${webhookUrl}/${flowLogic}`;
-            console.log(`We found a webhook: ${postUrl}`);
-            if (webhookUrl) {
+            const message =
+              msg.message?.conversation ||
+              msg.message?.imageMessage?.caption ||
+              msg.message?.extendedTextMessage?.text;
+
+            const postUrl = `http://localhost:3001/webhook/${sessionId}`;
+
+            console.log(`Message received: ${message}`);
+
+            // console.log(`the post url is ${postUrl}
+            // the body is ${JSON.stringify(
+            //   {
+            //     message: msg,
+            //     group: group,
+            //   },
+            //   null,
+            //   4
+            // )}`);
+
+            const prefixes = ["Boris,", "/"];
+
+            if (
+              postUrl &&
+              prefixes.some((prefix) =>
+                message.toLowerCase().startsWith(prefix.toLowerCase())
+              )
+            ) {
+              console.log("Sending message to webhook");
+              console.log(
+                "Message",
+                JSON.stringify(
+                  {
+                    key: msg.key,
+                    wppName: msg.pushName,
+                    timestamp: msg.messageTimestamp,
+                    text: message,
+                  },
+                  null,
+                  4
+                )
+              );
               let res = await axios.post(postUrl, {
-                sessionId: sessionId,
-                from: msg.key.remoteJid,
-                msg,
+                message: {
+                  key: msg.key,
+                  wppName: msg.pushName,
+                  timestamp: msg.messageTimestamp,
+                  text: message,
+                },
                 group: group,
               });
-              console.log("res", res.data);
+              console.log("Status", JSON.stringify(res.data, null, 4));
               if (res.data.status == "success") {
                 await sock.sendMessage(msg.key.remoteJid, {
                   text: res.data.message,
@@ -144,8 +178,6 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
         }
       }
     }
-    // http://localhost:5678/webhook-test/f93b4ca9-9e5b-4605-8890-c0096614f018
-    //http://localhost:5678/webhook/f93b4ca9-9e5b-4605-8890-c0096614f018
   });
 };
 
@@ -227,10 +259,12 @@ const initSocketAndSendMessage = async ({ sessionId, jid, message }) => {
   }
 };
 
+const activeSockets = {};
+
 const init = async () => {
   const sessions = await query(
-    `SELECT * FROM auth_keys WHERE key_id = 'creds'`,
-    []
+    `SELECT * FROM auth_keys WHERE key_id = 'creds' and bot_id = ?`,
+    ["tapago"]
   );
 
   for (const session of sessions) {
@@ -241,6 +275,7 @@ const init = async () => {
       await startEvents({ sock, saveCreds, sessionId: session.bot_id });
       const { waitForSocketOpen, sendMessages } = sock;
       await waitForSocketOpen();
+      activeSockets[session.bot_id] = sock;
       console.log(`Session ${session.bot_id} started`);
     } catch (error) {
       console.error("Error starting session", error);
@@ -256,4 +291,5 @@ export {
   isSessionExists,
   createSession,
   initSocketAndSendMessage,
+  activeSockets,
 };

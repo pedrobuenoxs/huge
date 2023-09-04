@@ -22,13 +22,6 @@ import path from "path";
 const currentDir = process.cwd();
 
 const PROD_BUILD = path.resolve(currentDir, "./client/build");
-const DEV_BUILD = path.resolve(currentDir, "./client/public");
-
-app.use(express.static(path.resolve(currentDir, PROD_BUILD)));
-
-app.get("*", (request, response) => {
-  response.sendFile(path.resolve(currentDir, PROD_BUILD, "index.html"));
-});
 
 app.listen(process.env.PORT || 8000, () => {
   // init();
