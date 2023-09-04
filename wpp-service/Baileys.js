@@ -6,19 +6,17 @@ import makeWASocket, {
   isJidBroadcast,
   useMultiFileAuthState,
 } from "@whiskeysockets/baileys";
-
 import axios from "axios";
-
 import logger from "./logs.js";
 import useSQLAuthState from "./DbAuth.js";
-import response from "../response.js";
 import query from "../database/dbpromise.js";
 
 const msgRetryCounterCache = new NodeCache();
 const CONNECTION_LOST = 408;
 const RESTART_REQUIRED = 515;
 
-const createSocket = async ({ state, version }) => {
+const createSocket = async ({ state }) => {
+  const { version } = await fetchLatestBaileysVersion();
   return makeWASocket.default({
     version,
     logger,
@@ -33,49 +31,12 @@ const createSocket = async ({ state, version }) => {
   });
 };
 
-const startEventsAndSendQrCode = async ({
+const startEvents = async ({
   sock,
-  res,
   saveCreds,
   sessionId,
-  sendQrCode = true,
+  numReconnect = 3,
 }) => {
-  sock.ev.process(async (events) => {
-    const connectionUpdate = events["connection.update"];
-    const credsUpdate = events["creds.update"];
-    const messageUpsert = events["messages.upsert"];
-
-    if (connectionUpdate) {
-      const { connection, lastDisconnect, qr } = connectionUpdate;
-
-      if (connection === "close") {
-        const errorCode = lastDisconnect?.error?.output?.statusCode;
-        console.log("errorCode", errorCode);
-        if (errorCode === CONNECTION_LOST || errorCode !== RESTART_REQUIRED) {
-          console.log("Connection closed. You are logged out.");
-        } else {
-          console.log("Restart required.");
-          createSession({
-            sessionId: sessionId,
-            res: null,
-            sendQrCode: false,
-          });
-        }
-      }
-
-      if (qr && sendQrCode) {
-        sendQrCode = false;
-        response(res, 200, true, "QR code generated.", { qr });
-      }
-    }
-
-    if (credsUpdate) {
-      await saveCreds();
-    }
-  });
-};
-
-const startEvents = async ({ sock, saveCreds, sessionId }) => {
   sock.ev.process(async (events) => {
     const connectionUpdate = events["connection.update"];
     const credsUpdate = events["creds.update"];
@@ -89,10 +50,18 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
         const errorCode = lastDisconnect?.error?.output?.statusCode;
         console.log("errorCode", errorCode);
         if (errorCode === CONNECTION_LOST || errorCode !== RESTART_REQUIRED) {
-          console.log("Connection closed. You are logged out.");
-        } else {
-          console.log("Restart required.");
-          startEvents({ sock, saveCreds, sessionId });
+          try {
+            // try to reconnect
+            if (numReconnect > 0) {
+              console.log("Reconnecting...");
+              numReconnect--;
+              const { state, saveCreds } = await useSQLAuthState(sessionId);
+              const sock = await createSocket({ state });
+              await startEvents({ sock, saveCreds, sessionId, numReconnect });
+            }
+          } catch (error) {
+            console.error("Error reconnecting", error);
+          }
         }
       }
     }
@@ -110,52 +79,29 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
               ? await sock.groupMetadata(msg.key.remoteJid)
               : {};
             let queryRes = await query(
-              `SELECT webhook_url,flow_logic FROM webhooks WHERE bot_id = ?`,
+              `SELECT base_url FROM webhook_url WHERE session_id = ?`,
               [sessionId]
             );
-            let webhookUrl = queryRes[0]?.webhook_url;
+            let baseUrl = queryRes[0]?.base_url;
 
             const message =
               msg.message?.conversation ||
               msg.message?.imageMessage?.caption ||
               msg.message?.extendedTextMessage?.text;
 
-            const postUrl = `http://localhost:3001/webhook/${sessionId}`;
+            const postUrl = `${baseUrl}/${sessionId}`;
 
             console.log(`Message received: ${message}`);
-
-            // console.log(`the post url is ${postUrl}
-            // the body is ${JSON.stringify(
-            //   {
-            //     message: msg,
-            //     group: group,
-            //   },
-            //   null,
-            //   4
-            // )}`);
 
             const prefixes = ["Boris,", "/"];
 
             if (
-              postUrl &&
+              baseUrl &&
               prefixes.some((prefix) =>
                 message.toLowerCase().startsWith(prefix.toLowerCase())
               )
             ) {
               console.log("Sending message to webhook");
-              console.log(
-                "Message",
-                JSON.stringify(
-                  {
-                    key: msg.key,
-                    wppName: msg.pushName,
-                    timestamp: msg.messageTimestamp,
-                    text: message,
-                  },
-                  null,
-                  4
-                )
-              );
               let res = await axios.post(postUrl, {
                 message: {
                   key: msg.key,
@@ -181,84 +127,6 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
   });
 };
 
-const createSession = async ({ sessionId, res, sendQrCode }) => {
-  try {
-    const { state, saveCreds } = await useSQLAuthState(sessionId);
-    const { version, isLatest } = await fetchLatestBaileysVersion();
-    console.log(`using WA v${version.join(".")}, isLatest: ${isLatest}`);
-    const sock = await createSocket({ state, version });
-    await startEventsAndSendQrCode({
-      sock,
-      saveCreds,
-      res,
-      sessionId,
-      sendQrCode,
-    });
-    return {
-      status: true,
-      message: "Session created",
-      sock,
-    };
-  } catch (error) {
-    console.error("Error creating session", error);
-    return {
-      status: false,
-      message: "Error creating session",
-      error,
-    };
-  }
-};
-
-const getSession = async (sessionId) => {
-  const { state } = await useSQLAuthState(sessionId, false);
-  const { version } = await fetchLatestBaileysVersion();
-  return createSocket(state, version);
-};
-
-const isSessionExists = async (sessionId) => {
-  const sessionQuery = await query(`SELECT * FROM auth_keys WHERE bot_id = ?`, [
-    sessionId,
-  ]);
-  return sessionQuery.length > 0;
-};
-
-const deleteSession = async (sessionId, logout = true) => {
-  if (logout) {
-    try {
-      const session = await getSession(sessionId);
-      console.log("logging out");
-      await session.logout();
-    } catch (error) {
-      console.error("Error logging out", error);
-    }
-  }
-
-  try {
-    await query(`DELETE FROM auth_keys WHERE bot_id = ?`, [sessionId]);
-  } catch (error) {
-    console.error("Error deleting", error);
-  }
-};
-
-const initSocketAndSendMessage = async ({ sessionId, jid, message }) => {
-  try {
-    const { state, saveCreds } = await useSQLAuthState(sessionId);
-    const { version } = await fetchLatestBaileysVersion();
-    const sock = await createSocket({ state, version });
-    await startEvents({ sock, saveCreds, sessionId });
-    const { waitForSocketOpen, sendMessage } = sock;
-
-    await waitForSocketOpen();
-    setTimeout(async () => {
-      await sendMessage(jid, { text: message });
-      console.log("Message sent");
-    }, 5000);
-    console.log("Message sent");
-  } catch (error) {
-    console.error("Error sending message", error);
-  }
-};
-
 const activeSockets = {};
 
 const init = async () => {
@@ -270,8 +138,7 @@ const init = async () => {
   for (const session of sessions) {
     try {
       const { state, saveCreds } = await useSQLAuthState(session.bot_id);
-      const { version } = await fetchLatestBaileysVersion();
-      const sock = await createSocket({ state, version });
+      const sock = await createSocket({ state });
       await startEvents({ sock, saveCreds, sessionId: session.bot_id });
       const { waitForSocketOpen, sendMessages } = sock;
       await waitForSocketOpen();
@@ -285,11 +152,4 @@ const init = async () => {
 
 init();
 
-export {
-  getSession,
-  deleteSession,
-  isSessionExists,
-  createSession,
-  initSocketAndSendMessage,
-  activeSockets,
-};
+export { activeSockets };
