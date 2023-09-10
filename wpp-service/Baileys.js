@@ -53,6 +53,35 @@ const startEvents = async ({
     const connectionUpdate = events["connection.update"];
     const credsUpdate = events["creds.update"];
     const messageUpsert = events["messages.upsert"];
+    const groupUpdate = events["group.update"];
+    const groupUpsert = events["group.upsert"];
+    const groupUpdateParticipants = events["group-participants.update"];
+    console.log("events", events);
+    if (groupUpdate) {
+      console.log("groupUpdate", groupUpdate);
+    }
+    if (groupUpsert) {
+      console.log("groupUpsert", groupUpsert);
+    }
+    if (groupUpdateParticipants) {
+      const { id, participants, action } = groupUpdateParticipants;
+      if (action === "add" && sessionId === "tapago") {
+        let message = "\t*LOOK AT HIM!*\n\nSeja bem-vindo(a) ao grupo!";
+        message += `\n\nEu sou o *Boris Bilder*, o Bot do grupo 🤖.\n Fui criado para te motivar!`;
+        message += `\n\n*Como funciona?*`;
+        message += `\nCrie um grupo com seus amigos e me adicione. Eu vou lembrar voces de se manterem focados naquele projeto fitness.`;
+        message += `\n\n*COMANDOS*`;
+        message += `\n\n*Boris, entrar* - Para se cadastrar no grupo`;
+        message += `\n*Boris, comandos* - Para ver os comandos disponíveis`;
+        message += `\n\n *Redes Sociais*`;
+        message += `\n\nNosso site: https://www.hojetapago.com.br/`;
+        message += `\nNosso insta: instagram.com/hoje.tapago`;
+        let sent = await sock.sendMessage(id, {
+          text: message,
+        });
+        tempStore[sent.key.id] = sent;
+      }
+    }
     let sendQrCode = true;
 
     if (connectionUpdate) {
@@ -95,7 +124,7 @@ const startEvents = async ({
               [sessionId]
             );
             let baseUrl = queryRes[0]?.base_url;
-
+            // let baseUrl = "http://localhost:3000/webhook";
             const message =
               msg.message?.conversation ||
               msg.message?.imageMessage?.caption ||
