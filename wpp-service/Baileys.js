@@ -43,12 +43,7 @@ const createSocket = async ({ state }) => {
   });
 };
 
-const startEvents = async ({
-  sock,
-  saveCreds,
-  sessionId,
-  numReconnect = 3,
-}) => {
+const startEvents = async ({ sock, saveCreds, sessionId }) => {
   sock.ev.process(async (events) => {
     const connectionUpdate = events["connection.update"];
     const credsUpdate = events["creds.update"];
@@ -93,13 +88,10 @@ const startEvents = async ({
         if (errorCode === CONNECTION_LOST || errorCode !== RESTART_REQUIRED) {
           try {
             // try to reconnect
-            if (numReconnect > 0) {
-              console.log("Reconnecting...");
-              numReconnect--;
-              const { state, saveCreds } = await useSQLAuthState(sessionId);
-              const sock = await createSocket({ state });
-              await startEvents({ sock, saveCreds, sessionId, numReconnect });
-            }
+            console.log("Reconnecting...");
+            const { state, saveCreds } = await useSQLAuthState(sessionId);
+            const sock = await createSocket({ state });
+            await startEvents({ sock, saveCreds, sessionId, numReconnect });
           } catch (error) {
             console.error("Error reconnecting", error);
           }
