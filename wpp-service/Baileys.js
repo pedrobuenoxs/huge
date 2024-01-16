@@ -51,33 +51,6 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
     const groupUpdate = events["group.update"];
     const groupUpsert = events["group.upsert"];
     const groupUpdateParticipants = events["group-participants.update"];
-    console.log("events", events);
-    if (groupUpdate) {
-      console.log("groupUpdate", groupUpdate);
-    }
-    if (groupUpsert) {
-      console.log("groupUpsert", groupUpsert);
-    }
-    if (groupUpdateParticipants) {
-      const { id, participants, action } = groupUpdateParticipants;
-      if (action === "add" && sessionId === "tapago") {
-        let message = "\t*LOOK AT HIM!*\n\nSeja bem-vindo(a) ao grupo!";
-        message += `\n\nEu sou o *Boris Bilder*, o Bot do grupo 🤖.\n Fui criado para te motivar!`;
-        message += `\n\n*Como funciona?*`;
-        message += `\nCrie um grupo com seus amigos e me adicione. Eu vou lembrar voces de se manterem focados naquele projeto fitness.`;
-        message += `\n\n*COMANDOS*`;
-        message += `\n\n*Boris, entrar* - Para se cadastrar no grupo`;
-        message += `\n*Boris, comandos* - Para ver os comandos disponíveis`;
-        message += `\n\n *Redes Sociais*`;
-        message += `\n\nNosso site: https://www.hojetapago.com.br/`;
-        message += `\nNosso insta: instagram.com/hoje.tapago`;
-        let sent = await sock.sendMessage(id, {
-          text: message,
-        });
-        tempStore[sent.key.id] = sent;
-      }
-    }
-    let sendQrCode = true;
 
     if (connectionUpdate) {
       const { connection, lastDisconnect, qr } = connectionUpdate;
@@ -85,13 +58,13 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
       if (connection === "close") {
         const errorCode = lastDisconnect?.error?.output?.statusCode;
         console.log("errorCode", errorCode);
-        if (errorCode === CONNECTION_LOST || errorCode !== RESTART_REQUIRED) {
+        if (errorCode === 408 || errorCode == 515) {
           try {
             // try to reconnect
             console.log("Reconnecting...");
             const { state, saveCreds } = await useSQLAuthState(sessionId);
             const sock = await createSocket({ state });
-            await startEvents({ sock, saveCreds, sessionId, numReconnect });
+            await startEvents({ sock, saveCreds, sessionId });
           } catch (error) {
             console.error("Error reconnecting", error);
           }
@@ -111,47 +84,15 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
             let group = isGroup
               ? await sock.groupMetadata(msg.key.remoteJid)
               : {};
-            let queryRes = await query(
-              `SELECT base_url FROM webhook_url WHERE session_id = ?`,
-              [sessionId]
-            );
-            let baseUrl = queryRes[0]?.base_url;
-            // let baseUrl = "http://localhost:3000/webhook";
+
             const message =
               msg.message?.conversation ||
               msg.message?.imageMessage?.caption ||
               msg.message?.extendedTextMessage?.text;
 
-            const postUrl = `${baseUrl}/${sessionId}`;
-
-            console.log(`Message received: ${message}`);
-
-            const prefixes = ["Boris,", "/"];
-
-            if (
-              baseUrl &&
-              prefixes.some((prefix) =>
-                message.toLowerCase().startsWith(prefix.toLowerCase())
-              )
-            ) {
-              console.log("Sending message to webhook");
-              let res = await axios.post(postUrl, {
-                message: {
-                  key: msg.key,
-                  wppName: msg.pushName,
-                  timestamp: msg.messageTimestamp,
-                  text: message,
-                },
-                group: group,
-              });
-              console.log("Status", JSON.stringify(res.data, null, 4));
-              if (res.data.status == "success") {
-                let sent = await sock.sendMessage(msg.key.remoteJid, {
-                  text: res.data.message,
-                });
-                tempStore[sent.key.id] = sent;
-              }
-            }
+            console.log(
+              `Received message from ${msg.key.remoteJid}: ${message}`
+            );
           } catch (error) {
             console.error("error", error);
           }
@@ -164,23 +105,22 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
 const activeSockets = {};
 
 const init = async () => {
-  const sessions = await query(
-    `SELECT * FROM auth_keys WHERE key_id = 'creds' and bot_id = ?`,
-    ["tapago"]
-  );
-
-  for (const session of sessions) {
-    try {
-      const { state, saveCreds } = await useSQLAuthState(session.bot_id);
-      const sock = await createSocket({ state });
-      await startEvents({ sock, saveCreds, sessionId: session.bot_id });
-      const { waitForSocketOpen, sendMessages } = sock;
-      await waitForSocketOpen();
-      activeSockets[session.bot_id] = sock;
-      console.log(`Session ${session.bot_id} started`);
-    } catch (error) {
-      console.error("Error starting session", error);
-    }
+  // const auth_keys = await query(`SELECT * FROM auth_keys`, []);
+  // const deleteAuthKeys = async (bot_id) => {
+  //   return await query(`DELETE FROM auth_keys WHERE bot_id = ?`, [bot_id]);
+  // };
+  // deleteAuthKeys("ta_pago");
+  // console.log("auth_keys", auth_keys);
+  try {
+    const { state, saveCreds } = await useSQLAuthState("ta_pago");
+    const sock = await createSocket({ state });
+    await startEvents({ sock, saveCreds, sessionId: "ta_pago" });
+    const { waitForSocketOpen, sendMessages } = sock;
+    await waitForSocketOpen();
+    activeSockets["ta_pago"] = sock;
+    console.log(`Session ta_pago started`);
+  } catch (error) {
+    console.error("Error starting session", error);
   }
 };
 

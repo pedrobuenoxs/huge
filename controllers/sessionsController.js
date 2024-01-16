@@ -16,6 +16,7 @@ const add = async (req, res) => {
 
 const send = async (req, res) => {
   const { sessionId, jid, message } = req.body;
+  console.log(sessionId, jid, message);
 
   if (!sessionId || !jid || !message) {
     return res.status(400).json({
@@ -28,7 +29,7 @@ const send = async (req, res) => {
 
   if (baileysSocket) {
     try {
-      let sent = await baileysSocket.sendMessage(jid, { text: message });
+      let sent = await baileysSocket.sendMessage(jid, { text: message.text });
       tempStore[sent.key.id] = sent;
       res.json({ status: "success" });
     } catch (err) {

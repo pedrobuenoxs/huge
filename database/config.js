@@ -4,11 +4,11 @@ dotenv.config();
 
 const con = mysql.createPool({
   connectionLimit: 1000,
-  host: process.env.DBHOST,
-  port: process.env.DBPORT,
-  user: process.env.DBUSER,
-  password: process.env.DBPASS,
-  database: process.env.DBNAME,
+  host: process.env.MYSQLHOST,
+  port: process.env.MYSQLPORT,
+  user: process.env.MYSQLUSER,
+  password: process.env.MYSQL_ROOT_PASSWORD,
+  database: process.env.MYSQL_DATABASE,
   charset: "utf8mb4",
 });
 

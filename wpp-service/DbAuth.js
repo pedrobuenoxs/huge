@@ -3,20 +3,9 @@ import {
   initAuthCreds,
   BufferJSON,
 } from "@whiskeysockets/baileys";
-import path from "path";
 import fs from "fs/promises";
 
 import query from "../database/dbpromise.js";
-
-const fixFileName = (file) => {
-  // função que normaliza o nome da key
-  if (!file) {
-    return undefined;
-  }
-  const replacedSlash = file.replace(/\//g, "__");
-  const replacedColon = replacedSlash.replace(/:/g, "-");
-  return replacedColon;
-};
 
 export default async function useSQLAuthState(sessionID, saveOnlyCreds) {
   const localFolder = "folder";
@@ -114,32 +103,32 @@ export default async function useSQLAuthState(sessionID, saveOnlyCreds) {
 
 async function insertOrUpdateAuthKey(botId, keyId, keyJson) {
   // Verifica se o registro já existe na tabela
-  const selectQuery = `SELECT id FROM auth_keys WHERE bot_id = ? AND key_id = ?`;
+  const selectQuery = `SELECT id FROM auth_wpp WHERE bot_id = ? AND key_id = ?`;
   const rows = await query(selectQuery, [botId, keyId]);
 
   // Se o registro já existe, faz um update
   if (rows.length > 0) {
-    const updateQuery = `UPDATE auth_keys SET key_json = ?, updated_at = NOW() WHERE id = ?`;
+    const updateQuery = `UPDATE auth_wpp SET key_json = ?, updated_at = NOW() WHERE id = ?`;
     await query(updateQuery, [keyJson, rows[0].id]);
-    //console.log('Registro atualizado na tabela auth_keys');
+    //console.log('Registro atualizado na tabela auth_wpp');
   } else {
     // Se o registro não existe, faz um insert
-    const insertQuery = `INSERT INTO auth_keys (bot_id, key_id, key_json) VALUES (?, ?, ?)`;
+    const insertQuery = `INSERT INTO auth_wpp (bot_id, key_id, key_json) VALUES (?, ?, ?)`;
     await query(insertQuery, [botId, keyId, keyJson]);
-    //console.log('Registro inserido na tabela auth_keys');
+    //console.log('Registro inserido na tabela auth_wpp');
   }
 }
-// Função que busca um registro na tabela auth_keys
+// Função que busca um registro na tabela auth_wpp
 async function getAuthKey(botId, keyId) {
-  // Faz a consulta na tabela auth_keys
-  const query_str = `SELECT key_json FROM auth_keys WHERE bot_id = ? AND key_id = ?`;
+  // Faz a consulta na tabela auth_wpp
+  const query_str = `SELECT key_json FROM auth_wpp WHERE bot_id = ? AND key_id = ?`;
   const rows = await query(query_str, [botId, keyId]);
   // Retorna o conteúdo do key_json ou null, caso não tenha encontrado nenhum registro
   return rows.length > 0 ? rows[0].key_json : null;
 }
-// Função que deleta um registro da tabela auth_keys
+// Função que deleta um registro da tabela auth_wpp
 async function deleteAuthKey(botId, keyId) {
-  // Faz a exclusão na tabela auth_keys
-  const query_str = `DELETE FROM auth_keys WHERE bot_id = ? AND key_id = ?`;
+  // Faz a exclusão na tabela auth_wpp
+  const query_str = `DELETE FROM auth_wpp WHERE bot_id = ? AND key_id = ?`;
   await query(query_str, [botId, keyId]);
 }
