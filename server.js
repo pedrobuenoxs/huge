@@ -13,8 +13,12 @@ app.use(cookieParser());
 
 app.use("/api", routes);
 
-app.listen(process.env.PORT || 8000, () => {
-  console.log(`Server is running on port ${process.env.PORT || 8000}`);
+app.use("/", (req, res) => {
+  res.send("Hello");
+});
+
+app.listen(process.env.PORT || 5002, () => {
+  console.log(`Server is running on port ${process.env.PORT || 5002}`);
 });
 
 export default app;
