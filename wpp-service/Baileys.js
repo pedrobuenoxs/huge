@@ -8,13 +8,18 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 import axios from "axios";
 import logger from "./logs.js";
-import useSQLAuthState from "./DbAuth.js";
-import query from "../database/dbpromise.js";
+import { mongoClient } from "./mongoClient.js";
+import { useMongoDBAuthState } from "./DbAuthMongo.js";
+dotenv.config();
+import dotenv from "dotenv";
+
+// MongoDB URI and Database Name
+const dbName = process.env.MONGODB_SESSION_ENV;
 
 const msgRetryCounterCache = new NodeCache();
 const CONNECTION_LOST = 408;
 const RESTART_REQUIRED = 515;
-
+const authModel = mongoClient.db(dbName).collection("auth_wpp");
 const tempStore = {}; // This object will be used to store the bot's sent messages.  (MessageInfo object)
 
 // Below's function is what solves the problem
@@ -56,13 +61,14 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
       const { connection, lastDisconnect, qr } = connectionUpdate;
 
       if (connection === "close") {
-        const errorCode = lastDisconnect?.error?.output?.statusCode;
-        console.log("errorCode", errorCode);
+        const error = lastDisconnect?.error;
+        console.log("error", { error });
+        const errorCode = error?.output?.statusCode;
         if (errorCode === 408 || errorCode == 515) {
           try {
             // try to reconnect
             console.log("Reconnecting...");
-            const { state, saveCreds } = await useSQLAuthState(sessionId);
+            const { state, saveCreds } = await useMongoDBAuthState(authModel);
             const sock = await createSocket({ state });
             await startEvents({ sock, saveCreds, sessionId });
           } catch (error) {
@@ -105,22 +111,21 @@ const startEvents = async ({ sock, saveCreds, sessionId }) => {
 const activeSockets = {};
 
 const init = async () => {
-  // const auth_keys = await query(`SELECT * FROM auth_keys`, []);
-  // const deleteAuthKeys = async (bot_id) => {
-  //   return await query(`DELETE FROM auth_keys WHERE bot_id = ?`, [bot_id]);
-  // };
-  // deleteAuthKeys("ta_pago");
-  // console.log("auth_keys", auth_keys);
   try {
-    const { state, saveCreds } = await useSQLAuthState("ta_pago");
+    const { state, saveCreds } = await useMongoDBAuthState(authModel);
     const sock = await createSocket({ state });
     await startEvents({ sock, saveCreds, sessionId: "ta_pago" });
     const { waitForSocketOpen, sendMessages } = sock;
-    await waitForSocketOpen();
-    activeSockets["ta_pago"] = sock;
-    console.log(`Session ta_pago started`);
+    waitForSocketOpen()
+      .then(() => {
+        console.log(`Session ta_pago started`);
+        activeSockets["ta_pago"] = sock;
+      })
+      .catch((error) => {
+        console.error("Error starting session", error);
+      });
   } catch (error) {
-    console.error("Error starting session", error);
+    console.error("Error starting session");
   }
 };
 

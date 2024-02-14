@@ -13,4 +13,11 @@ router.post(
 
 router.post("/send", async (req, res) => await controller.send(req, res));
 
+router.post(
+  "/send-by-jids",
+  body("groupJids").isArray(),
+  requestValidator,
+  controller.sendByJids
+);
+
 export default router;

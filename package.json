@@ -26,6 +26,8 @@
     "extract-zip": "^2.0.1",
     "jsonwebtoken": "^9.0.0",
     "moment": "^2.29.4",
+    "mongoose": "^6.7.4",
+    "mongodb": "^4.12.1",
     "mysql2": "^3.5.2",
     "node-cleanup": "^2.1.2",
     "nodemailer": "^6.9.3",

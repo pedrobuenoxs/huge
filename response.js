@@ -5,7 +5,6 @@ const response = (
   message = "",
   data = {}
 ) => {
-  console.log("response", statusCode, success, message, data);
   res.status(statusCode);
   res.json({
     success,

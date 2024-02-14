@@ -1,6 +1,6 @@
+import { set } from "mongoose";
 import { activeSockets, tempStore } from "../wpp-service/Baileys.js";
 import response from "./../response.js";
-import query from "../database/dbpromise.js";
 
 const add = async (req, res) => {
   try {
@@ -16,7 +16,6 @@ const add = async (req, res) => {
 
 const send = async (req, res) => {
   const { sessionId, jid, message } = req.body;
-  console.log(sessionId, jid, message);
 
   if (!sessionId || !jid || !message) {
     return res.status(400).json({
@@ -40,4 +39,36 @@ const send = async (req, res) => {
   }
 };
 
-export { add, send };
+const sendByJids = async (req, res) => {
+  const { sessionId, groupJids, message } = req.body;
+
+  if (!sessionId || !groupJids || !message) {
+    return res.status(400).json({
+      status: "error",
+      message: "Missing required fields",
+    });
+  }
+
+  const baileysSocket = activeSockets[sessionId];
+
+  if (baileysSocket) {
+    for (let i = 0; i < groupJids.length; i++) {
+      try {
+        let sent = await baileysSocket.sendMessage(groupJids[i], {
+          text: message.text,
+        });
+        tempStore[sent.key.id] = sent;
+        setTimeout(() => {
+          console.log(`Message sent to ${groupJids[i]}`);
+        }, 1000);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    return res.json({ status: "success" });
+  } else {
+    res.status(404).json({ status: "error", message: "Session not found" });
+  }
+};
+
+export { add, send, sendByJids };
