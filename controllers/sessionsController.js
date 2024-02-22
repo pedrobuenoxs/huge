@@ -16,7 +16,7 @@ const add = async (req, res) => {
 
 const send = async (req, res) => {
   const { sessionId, jid, message } = req.body;
-
+  console.log({ sessionId, jid, message });
   if (!sessionId || !jid || !message) {
     return res.status(400).json({
       status: "error",
@@ -48,19 +48,20 @@ const sendByJids = async (req, res) => {
       message: "Missing required fields",
     });
   }
-
+  console.log({ activeSockets });
   const baileysSocket = activeSockets[sessionId];
+  console.log({ baileysSocket });
 
   if (baileysSocket) {
     for (let i = 0; i < groupJids.length; i++) {
       try {
         let sent = await baileysSocket.sendMessage(groupJids[i], {
-          text: message.text,
+          text: `${message.text}`,
         });
         tempStore[sent.key.id] = sent;
         setTimeout(() => {
-          console.log(`Message sent to ${groupJids[i]}`);
-        }, 1000);
+          console.log(`✅✅✅✅  Message sent to ${groupJids[i]}`);
+        }, 3000);
       } catch (err) {
         console.error(err);
       }
